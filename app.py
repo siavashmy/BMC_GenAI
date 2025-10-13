@@ -2,7 +2,7 @@
 import streamlit as st
 import google.generativeai as genai
 import os
-
+from visual_business_model_canvas import show_bmc_visualization
 # -------------------------------
 # Configure Gemini API
 # -------------------------------
@@ -67,7 +67,7 @@ Return only valid JSON and nothing else:
   ]
 }""",
 
-    "Value Propositions": """For the top dilemmas, propose 2–5 concrete only 2 or 3 value propositions (solutions) addressing the dilemmas while balancing drivers.
+    "Value Propositions": """For the top dilemmas, propose 2–5 concrete only maximum 3 value propositions (solutions) addressing the dilemmas while balancing drivers.
 Return only valid JSON and nothing else:
 {
   "value_propositions":[
@@ -326,16 +326,6 @@ if current_step == "SWOT Analysis" and len(st.session_state.conversation) > 0:
                             unsafe_allow_html=True,
                         )
 
-                    st.markdown(
-                        f"""
-                        <div style="background-color:#f9f9f9;border-radius:10px;padding:12px 16px;margin-top:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-                            <h5>💡 Recommendation</h5>
-                            <p>{entry.get("recommendation", "No recommendation provided.")}</p>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
                     st.markdown("---")
 
             else:
@@ -346,86 +336,7 @@ if current_step == "SWOT Analysis" and len(st.session_state.conversation) > 0:
         st.error(f"⚠️ Error displaying SWOT Analysis: {e}")
 
 # -------------------------------
-# Visual Business Model Canvas (Fixed-size Blocks)
+# Business Model Canvas Visualization
 # -------------------------------
 if current_step == "Business Model Canvas" and len(st.session_state.conversation) > 0:
-    st.markdown("---")
-    st.subheader("📊 Visual Business Model Canvas")
-
-    import json, re
-
-    # Normalize any list or string into a list of items
-    def listify(value):
-        if isinstance(value, list):
-            return [v for v in value if v]
-        elif isinstance(value, str):
-            parts = [v.strip("-• ") for v in re.split(r"[\n,;]", value) if v.strip()]
-            return parts
-        return []
-
-    # Render a block with fixed width and height
-    def render_block(icon, title, items, width="250px", height="200px", color="#f8f9fa"):
-        items_list = listify(items)
-        if not items_list:
-            items_list = ["—"]
-        st.markdown(
-            f"""
-            <div style="
-                width:{width};
-                height:{height};
-                overflow-y:auto;
-                background-color:{color};
-                border-radius:12px;
-                padding:12px 16px;
-                margin:8px;
-                box-shadow:0 1px 8px rgba(0,0,0,0.15);
-            ">
-                <h5 style="margin:0; font-size:16px;">{icon} {title}</h5>
-                <ul style="margin-top:4px; padding-left:20px;">
-                    {''.join(f'<li>{x}</li>' for x in items_list)}
-                </ul>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    try:
-        last_output = st.session_state.conversation[-1]["response"]
-        match = re.search(r"(\{(?:.|\n)*\})", last_output)
-        json_str = match.group(1) if match else None
-
-        if not json_str:
-            st.warning("⚠️ No JSON object found in model output.")
-        else:
-            data = json.loads(json_str)
-            if "bmc" in data and isinstance(data["bmc"], list):
-                for entry in data["bmc"]:
-                    vp_title = entry.get("value_proposition", "Unnamed Value Proposition")
-                    st.markdown(f"## 💡 {vp_title}")
-
-                    canvas = entry.get("canvas", {})
-                    normalized_canvas = {k.lower().replace(" ", "_").strip(): v for k, v in canvas.items()}
-
-                    # Define a 3x3 grid for BMC
-                    row1, row2, row3 = st.columns(3)
-                    with row1:
-                        render_block("5️⃣", "Key Partners", normalized_canvas.get("key_partners") or normalized_canvas.get("key_partnerships"))
-                        render_block("6️⃣", "Key Activities", normalized_canvas.get("key_activities"))
-                        render_block("7️⃣", "Key Resources", normalized_canvas.get("key_resources"))
-                    with row2:
-                        render_block("2️⃣", "Customer Segments", normalized_canvas.get("customer_segments"))
-                        render_block("1️⃣", "Value Propositions", normalized_canvas.get("value_propositions"), width="300px", height="250px", color="#fffbe6")
-                        render_block("3️⃣", "Customer Relationships", normalized_canvas.get("customer_relationships"))
-                    with row3:
-                        render_block("4️⃣", "Channels", normalized_canvas.get("channels"))
-                        render_block("8️⃣", "Cost Structure", normalized_canvas.get("cost_structure"))
-                        render_block("9️⃣", "Revenue Streams", normalized_canvas.get("revenue_streams"))
-
-                    st.markdown("---")
-            else:
-                st.info("No valid Business Model Canvas data found in output.")
-    except json.JSONDecodeError as e:
-        st.error(f"❌ Could not parse Business Model Canvas JSON: {e}")
-    except Exception as e:
-        st.error(f"⚠️ Error displaying Business Model Canvas: {e}")
-
+    show_bmc_visualization(st.session_state.conversation[-1]["response"])
