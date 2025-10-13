@@ -33,7 +33,7 @@ STEPS = [
 PROMPTS = {
     "Focus Generation": """You are given the user's story below. Apply the Dilemma Triangle methodology (People, Planet, Prosperity) to extract focus areas.
 For each driver, produce 1–3 specific focus areas and a short rationale (1–2 sentences).
-Return JSON:
+Return only valid JSON and nothing else:
 {
   "focuses": [
     {"driver":"People","focus":"...","rationale":"..."},
@@ -43,7 +43,7 @@ Return JSON:
 }""",
 
     "Issues Generation": """Given the focus areas (and drivers), list 3–6 issues for each focus area that stem from it.
-Return JSON:
+Return only valid JSON and nothing else:
 {
   "issues_by_focus": [
     {"focus":"...","driver":"...","issues":[{"issue":"...","explain":"..."}]}
@@ -51,7 +51,7 @@ Return JSON:
 }""",
 
     "Tension Matrix": """Given the issues across focuses, generate a tension matrix describing conflicts or tradeoffs between issues.
-Return JSON:
+Return only valid JSON and nothing else:
 {
   "tensions":[
     {"issue_a":"...","issue_b":"...","tension":"...","why":"..."}
@@ -60,15 +60,15 @@ Return JSON:
 
     "Dilemmas & Ranking": """From the tension matrix, generate dilemmas phrased as tradeoffs.
 Each dilemma should include a title, description, affected drivers, and an importance score (1–10).
-Return JSON:
+Return only valid JSON and nothing else:
 {
   "dilemmas":[
     {"title":"...","description":"...","drivers":["People","Planet"],"score":8}
   ]
 }""",
 
-    "Value Propositions": """For the top dilemmas, propose 2–5 concrete value propositions (solutions) addressing the dilemmas while balancing drivers.
-Return JSON:
+    "Value Propositions": """For the top dilemmas, propose 2–5 concrete only 2 or 3 value propositions (solutions) addressing the dilemmas while balancing drivers.
+Return only valid JSON and nothing else:
 {
   "value_propositions":[
     {"title":"...","explain":"...","dilemmas":["..."],"benefits":["..."]}
@@ -76,18 +76,42 @@ Return JSON:
 }""",
 
     "SWOT Analysis": """Perform a SWOT analysis on each provided value proposition.
-Return JSON:
+Return only valid JSON and nothing else:
 {
   "swot":[
-    {"title":"...","S":["..."],"W":["..."],"O":["..."],"T":["..."],"recommendation":"..."}
+    {"title":"...","S":["..."],"W":["..."],"O":["..."],"T":["..."]}
   ]
 }""",
 
-    "Business Model Canvas": """Generate a Business Model Canvas (9 blocks) for each value proposition.
-Return Return only valid JSON and nothing else:
+"Business Model Canvas": """Generate a Business Model Canvas (9 blocks) for each value proposition.
+Return only valid JSON and nothing else. Make sure to include all 9 blocks with the exact keys:
+- key_partners
+- key_activities
+- key_resources
+- value_propositions
+- customer_relationships
+- channels
+- customer_segments
+- revenue_streams
+- cost_structure
+
+JSON format example:
 {
   "bmc":[
-    {"value_proposition":"...","canvas":{ ... }}
+    {
+      "value_proposition":"<Title of Value Proposition>",
+      "canvas":{
+        "key_partners":["..."],
+        "key_activities":["..."],
+        "key_resources":["..."],
+        "value_propositions":["..."],
+        "customer_relationships":["..."],
+        "channels":["..."],
+        "customer_segments":["..."],
+        "revenue_streams":["..."],
+        "cost_structure":["..."]
+      }
+    }
   ]
 }"""
 }
@@ -229,7 +253,100 @@ if st.session_state.completed:
             st.error(f"❌ Error saving file: {e}")
 
 # -------------------------------
-# Visual Business Model Canvas (after final step)
+# Visual SWOT Analysis
+# -------------------------------
+if current_step == "SWOT Analysis" and len(st.session_state.conversation) > 0:
+    st.markdown("---")
+    st.subheader("🧠 SWOT Analysis Dashboard")
+
+    import json, re
+
+    def listify(value):
+        """Convert string or list into bullet list."""
+        if isinstance(value, list):
+            return value
+        elif isinstance(value, str):
+            return [v.strip("-• ") for v in re.split(r"[\n,;]", value) if v.strip()]
+        return []
+
+    try:
+        last_output = st.session_state.conversation[-1]["response"]
+        match = re.search(r"(\{(?:.|\n)*\})", last_output)
+        json_str = match.group(1) if match else None
+
+        if not json_str:
+            st.warning("⚠️ No JSON object found in SWOT output.")
+        else:
+            data = json.loads(json_str)
+            if "swot" in data and isinstance(data["swot"], list):
+                for entry in data["swot"]:
+                    st.markdown(f"## 🌿 {entry.get('title', 'Untitled Initiative')}")
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(
+                            """
+                            <div style="background-color:#e6ffe6;border-radius:10px;padding:10px 16px;margin-bottom:8px;">
+                                <h5>💪 Strengths</h5>
+                                <ul style="margin-top:6px;">
+                            """ +
+                            "".join([f"<li>{s}</li>" for s in listify(entry.get("S"))]) +
+                            "</ul></div>",
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown(
+                            """
+                            <div style="background-color:#fff0f0;border-radius:10px;padding:10px 16px;margin-bottom:8px;">
+                                <h5>⚠️ Weaknesses</h5>
+                                <ul style="margin-top:6px;">
+                            """ +
+                            "".join([f"<li>{w}</li>" for w in listify(entry.get("W"))]) +
+                            "</ul></div>",
+                            unsafe_allow_html=True,
+                        )
+                    with col2:
+                        st.markdown(
+                            """
+                            <div style="background-color:#f0f8ff;border-radius:10px;padding:10px 16px;margin-bottom:8px;">
+                                <h5>🚀 Opportunities</h5>
+                                <ul style="margin-top:6px;">
+                            """ +
+                            "".join([f"<li>{o}</li>" for o in listify(entry.get("O"))]) +
+                            "</ul></div>",
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown(
+                            """
+                            <div style="background-color:#fff8e6;border-radius:10px;padding:10px 16px;margin-bottom:8px;">
+                                <h5>💣 Threats</h5>
+                                <ul style="margin-top:6px;">
+                            """ +
+                            "".join([f"<li>{t}</li>" for t in listify(entry.get("T"))]) +
+                            "</ul></div>",
+                            unsafe_allow_html=True,
+                        )
+
+                    st.markdown(
+                        f"""
+                        <div style="background-color:#f9f9f9;border-radius:10px;padding:12px 16px;margin-top:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+                            <h5>💡 Recommendation</h5>
+                            <p>{entry.get("recommendation", "No recommendation provided.")}</p>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                    st.markdown("---")
+
+            else:
+                st.info("No valid SWOT data found in output.")
+    except json.JSONDecodeError as e:
+        st.error(f"❌ Could not parse SWOT JSON: {e}")
+    except Exception as e:
+        st.error(f"⚠️ Error displaying SWOT Analysis: {e}")
+
+# -------------------------------
+# Visual Business Model Canvas (Fixed-size Blocks)
 # -------------------------------
 if current_step == "Business Model Canvas" and len(st.session_state.conversation) > 0:
     st.markdown("---")
@@ -237,14 +354,40 @@ if current_step == "Business Model Canvas" and len(st.session_state.conversation
 
     import json, re
 
+    # Normalize any list or string into a list of items
     def listify(value):
-        """Convert string, list, or comma-separated input into a clean list."""
         if isinstance(value, list):
-            return value
+            return [v for v in value if v]
         elif isinstance(value, str):
             parts = [v.strip("-• ") for v in re.split(r"[\n,;]", value) if v.strip()]
             return parts
         return []
+
+    # Render a block with fixed width and height
+    def render_block(icon, title, items, width="250px", height="200px", color="#f8f9fa"):
+        items_list = listify(items)
+        if not items_list:
+            items_list = ["—"]
+        st.markdown(
+            f"""
+            <div style="
+                width:{width};
+                height:{height};
+                overflow-y:auto;
+                background-color:{color};
+                border-radius:12px;
+                padding:12px 16px;
+                margin:8px;
+                box-shadow:0 1px 8px rgba(0,0,0,0.15);
+            ">
+                <h5 style="margin:0; font-size:16px;">{icon} {title}</h5>
+                <ul style="margin-top:4px; padding-left:20px;">
+                    {''.join(f'<li>{x}</li>' for x in items_list)}
+                </ul>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     try:
         last_output = st.session_state.conversation[-1]["response"]
@@ -257,55 +400,26 @@ if current_step == "Business Model Canvas" and len(st.session_state.conversation
             data = json.loads(json_str)
             if "bmc" in data and isinstance(data["bmc"], list):
                 for entry in data["bmc"]:
-                    vp = entry.get("value_proposition", "Unnamed")
-                    st.markdown(f"## 💡 {vp}")
+                    vp_title = entry.get("value_proposition", "Unnamed Value Proposition")
+                    st.markdown(f"## 💡 {vp_title}")
 
                     canvas = entry.get("canvas", {})
-                    canvas = {k.lower(): v for k, v in canvas.items()}
+                    normalized_canvas = {k.lower().replace(" ", "_").strip(): v for k, v in canvas.items()}
 
-                    # Helper for rendering each block
-                    def render_block(icon, title, items, color="#f8f9fa"):
-                        st.markdown(
-                            f"""
-                            <div style="
-                                background-color:{color};
-                                border-radius:12px;
-                                padding:12px 16px;
-                                margin-bottom:8px;
-                                box-shadow:0 1px 4px rgba(0,0,0,0.08);
-                                ">
-                                <h5 style="margin:0; font-size:16px;">{icon} {title}</h5>
-                                <ul style="margin-top:4px; padding-left:20px;">
-                                    {''.join(f'<li>{x}</li>' for x in listify(items))}
-                                </ul>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-
-                    # Layout rows and columns roughly matching BMC structure
-                    top_col1, top_col2, top_col3 = st.columns([1.3, 1.6, 1.3])
-                    with top_col1:
-                        render_block("🧱", "Key Partners", canvas.get("key_partners"), "#f0f4ff")
-                    with top_col2:
-                        render_block("⚙️", "Key Activities", canvas.get("key_activities"), "#f9f0ff")
-                    with top_col3:
-                        render_block("🧩", "Key Resources", canvas.get("key_resources"), "#f0fff4")
-
-                    mid_col1, mid_col2, mid_col3 = st.columns([1.2, 1.8, 1.2])
-                    with mid_col1:
-                        render_block("🤝", "Customer Relationships", canvas.get("customer_relationships"), "#fff8f0")
-                        render_block("🚚", "Channels", canvas.get("channels"), "#fff0f6")
-                    with mid_col2:
-                        render_block("🎁", "Value Propositions", canvas.get("value_propositions"), "#fffbe6")
-                    with mid_col3:
-                        render_block("👥", "Customer Segments", canvas.get("customer_segments"), "#f0fffe")
-
-                    bot_col1, bot_col2 = st.columns(2)
-                    with bot_col1:
-                        render_block("💵", "Revenue Streams", canvas.get("revenue_streams"), "#f6fff0")
-                    with bot_col2:
-                        render_block("💰", "Cost Structure", canvas.get("cost_structure"), "#fff0f0")
+                    # Define a 3x3 grid for BMC
+                    row1, row2, row3 = st.columns(3)
+                    with row1:
+                        render_block("5️⃣", "Key Partners", normalized_canvas.get("key_partners") or normalized_canvas.get("key_partnerships"))
+                        render_block("6️⃣", "Key Activities", normalized_canvas.get("key_activities"))
+                        render_block("7️⃣", "Key Resources", normalized_canvas.get("key_resources"))
+                    with row2:
+                        render_block("2️⃣", "Customer Segments", normalized_canvas.get("customer_segments"))
+                        render_block("1️⃣", "Value Propositions", normalized_canvas.get("value_propositions"), width="300px", height="250px", color="#fffbe6")
+                        render_block("3️⃣", "Customer Relationships", normalized_canvas.get("customer_relationships"))
+                    with row3:
+                        render_block("4️⃣", "Channels", normalized_canvas.get("channels"))
+                        render_block("8️⃣", "Cost Structure", normalized_canvas.get("cost_structure"))
+                        render_block("9️⃣", "Revenue Streams", normalized_canvas.get("revenue_streams"))
 
                     st.markdown("---")
             else:
@@ -314,3 +428,4 @@ if current_step == "Business Model Canvas" and len(st.session_state.conversation
         st.error(f"❌ Could not parse Business Model Canvas JSON: {e}")
     except Exception as e:
         st.error(f"⚠️ Error displaying Business Model Canvas: {e}")
+

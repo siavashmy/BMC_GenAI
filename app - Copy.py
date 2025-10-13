@@ -2,7 +2,6 @@
 import streamlit as st
 import google.generativeai as genai
 import os
-import json
 
 # -------------------------------
 # Configure Gemini API
@@ -15,7 +14,7 @@ genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 model = genai.GenerativeModel("gemini-2.0-flash")
 
 # -------------------------------
-# Define new workflow steps
+# Define workflow steps
 # -------------------------------
 STEPS = [
     "Story Input",
@@ -34,7 +33,7 @@ STEPS = [
 PROMPTS = {
     "Focus Generation": """You are given the user's story below. Apply the Dilemma Triangle methodology (People, Planet, Prosperity) to extract focus areas.
 For each driver, produce 1–3 specific focus areas and a short rationale (1–2 sentences).
-Return JSON:
+Return only valid JSON and nothing else:
 {
   "focuses": [
     {"driver":"People","focus":"...","rationale":"..."},
@@ -44,7 +43,7 @@ Return JSON:
 }""",
 
     "Issues Generation": """Given the focus areas (and drivers), list 3–6 issues for each focus area that stem from it.
-Return JSON:
+Return only valid JSON and nothing else:
 {
   "issues_by_focus": [
     {"focus":"...","driver":"...","issues":[{"issue":"...","explain":"..."}]}
@@ -52,7 +51,7 @@ Return JSON:
 }""",
 
     "Tension Matrix": """Given the issues across focuses, generate a tension matrix describing conflicts or tradeoffs between issues.
-Return JSON:
+Return only valid JSON and nothing else:
 {
   "tensions":[
     {"issue_a":"...","issue_b":"...","tension":"...","why":"..."}
@@ -61,7 +60,7 @@ Return JSON:
 
     "Dilemmas & Ranking": """From the tension matrix, generate dilemmas phrased as tradeoffs.
 Each dilemma should include a title, description, affected drivers, and an importance score (1–10).
-Return JSON:
+Return only valid JSON and nothing else:
 {
   "dilemmas":[
     {"title":"...","description":"...","drivers":["People","Planet"],"score":8}
@@ -69,7 +68,7 @@ Return JSON:
 }""",
 
     "Value Propositions": """For the top dilemmas, propose 2–5 concrete value propositions (solutions) addressing the dilemmas while balancing drivers.
-Return JSON:
+Return only valid JSON and nothing else:
 {
   "value_propositions":[
     {"title":"...","explain":"...","dilemmas":["..."],"benefits":["..."]}
@@ -77,7 +76,7 @@ Return JSON:
 }""",
 
     "SWOT Analysis": """Perform a SWOT analysis on each provided value proposition.
-Return JSON:
+Return only valid JSON and nothing else:
 {
   "swot":[
     {"title":"...","S":["..."],"W":["..."],"O":["..."],"T":["..."],"recommendation":"..."}
@@ -85,20 +84,10 @@ Return JSON:
 }""",
 
     "Business Model Canvas": """Generate a Business Model Canvas (9 blocks) for each value proposition.
-Return JSON:
+Return only valid JSON and nothing else:
 {
   "bmc":[
-    {"value_proposition":"...","canvas":{
-      "Customer Segments":["..."],
-      "Value Propositions":["..."],
-      "Channels":["..."],
-      "Customer Relationships":["..."],
-      "Revenue Streams":["..."],
-      "Key Activities":["..."],
-      "Key Resources":["..."],
-      "Key Partners":["..."],
-      "Cost Structure":["..."]
-    }}
+    {"value_proposition":"...","canvas":{ ... }}
   ]
 }"""
 }
@@ -112,6 +101,8 @@ if "conversation" not in st.session_state:
     st.session_state.conversation = []
 if "story" not in st.session_state:
     st.session_state.story = ""
+if "completed" not in st.session_state:
+    st.session_state.completed = False  # New flag for final completion
 
 # -------------------------------
 # Current step
@@ -141,10 +132,10 @@ if current_step == "Story Input":
             st.warning("Please enter the story before continuing.")
 
 # -------------------------------
-# Step 2–8: Auto-generated using previous outputs
+# Step 2–8: LLM-driven steps
 # -------------------------------
 else:
-    # If response for this step not yet generated, generate it
+    # Generate if not already done
     if len(st.session_state.conversation) <= st.session_state.step_index:
         prev_outputs = "\n\n".join([f"### Step: {c['step']}\n{c['response']}" for c in st.session_state.conversation])
         base_prompt = PROMPTS.get(current_step, "")
@@ -164,7 +155,7 @@ else:
         st.success(f"✅ {current_step} generated successfully.")
         st.rerun()
 
-    # Display existing steps
+    # Display conversation history
     for idx, item in enumerate(st.session_state.conversation):
         st.markdown(f"### {idx + 1}. {item['step']}")
         if item['step'] == "Story Input":
@@ -210,25 +201,116 @@ else:
                         st.success(f"Step {idx + 1} approved. Moving to next step: {STEPS[st.session_state.step_index]}")
                         st.rerun()
                     else:
-                        st.success("🎉 All steps completed!")
+                        st.session_state.completed = True  # Mark process completed
+                        st.success("🎉 All steps completed! You can now export the final report.")
+                        st.rerun()
 
         else:
             st.caption("✅ Step completed")
 
 # -------------------------------
-# Save final output
+# Final Export Button (only visible after last step approved)
 # -------------------------------
-if st.session_state.step_index == len(STEPS) - 1 and st.button("💾 Save Final Report"):
-    desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-    file_path = os.path.join(desktop_path, "BMC_Full_Report.txt")
+if st.session_state.completed:
+    st.markdown("---")
+    if st.button("💾 Save Final Report"):
+        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+        file_path = os.path.join(desktop_path, "BMC_Full_Report.txt")
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                for c in st.session_state.conversation:
+                    f.write(f"## {c['step']}\n")
+                    f.write(f"### Prompt:\n{c['prompt']}\n\n")
+                    f.write(f"### Response:\n{c['response']}\n\n")
+                    if c.get("feedback"):
+                        f.write(f"### Feedback:\n{c['feedback']}\n\n")
+            st.success(f"✅ Saved successfully at: {file_path}")
+        except Exception as e:
+            st.error(f"❌ Error saving file: {e}")
+
+# -------------------------------
+# Visual Business Model Canvas (after final step)
+# -------------------------------
+if current_step == "Business Model Canvas" and len(st.session_state.conversation) > 0:
+    st.markdown("---")
+    st.subheader("📊 Visual Business Model Canvas")
+
+    import json, re
+
+    def listify(value):
+        """Convert string, list, or comma-separated input into a clean list."""
+        if isinstance(value, list):
+            return value
+        elif isinstance(value, str):
+            parts = [v.strip("-• ") for v in re.split(r"[\n,;]", value) if v.strip()]
+            return parts
+        return []
+
     try:
-        with open(file_path, "w", encoding="utf-8") as f:
-            for c in st.session_state.conversation:
-                f.write(f"## {c['step']}\n")
-                f.write(f"### Prompt:\n{c['prompt']}\n\n")
-                f.write(f"### Response:\n{c['response']}\n\n")
-                if c.get("feedback"):
-                    f.write(f"### Feedback:\n{c['feedback']}\n\n")
-        st.success(f"✅ Saved successfully at: {file_path}")
+        last_output = st.session_state.conversation[-1]["response"]
+        match = re.search(r"(\{(?:.|\n)*\})", last_output)
+        json_str = match.group(1) if match else None
+
+        if not json_str:
+            st.warning("⚠️ No JSON object found in model output.")
+        else:
+            data = json.loads(json_str)
+            if "bmc" in data and isinstance(data["bmc"], list):
+                for entry in data["bmc"]:
+                    vp = entry.get("value_proposition", "Unnamed")
+                    st.markdown(f"## 💡 {vp}")
+
+                    canvas = entry.get("canvas", {})
+                    canvas = {k.lower(): v for k, v in canvas.items()}
+
+                    # Helper for rendering each block
+                    def render_block(icon, title, items, color="#f8f9fa"):
+                        st.markdown(
+                            f"""
+                            <div style="
+                                background-color:{color};
+                                border-radius:12px;
+                                padding:12px 16px;
+                                margin-bottom:8px;
+                                box-shadow:0 1px 4px rgba(0,0,0,0.08);
+                                ">
+                                <h5 style="margin:0; font-size:16px;">{icon} {title}</h5>
+                                <ul style="margin-top:4px; padding-left:20px;">
+                                    {''.join(f'<li>{x}</li>' for x in listify(items))}
+                                </ul>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+                    # Layout rows and columns roughly matching BMC structure
+                    top_col1, top_col2, top_col3 = st.columns([1.3, 1.6, 1.3])
+                    with top_col1:
+                        render_block("🧱", "Key Partners", canvas.get("key_partners"), "#f0f4ff")
+                    with top_col2:
+                        render_block("⚙️", "Key Activities", canvas.get("key_activities"), "#f9f0ff")
+                    with top_col3:
+                        render_block("🧩", "Key Resources", canvas.get("key_resources"), "#f0fff4")
+
+                    mid_col1, mid_col2, mid_col3 = st.columns([1.2, 1.8, 1.2])
+                    with mid_col1:
+                        render_block("🤝", "Customer Relationships", canvas.get("customer_relationships"), "#fff8f0")
+                        render_block("🚚", "Channels", canvas.get("channels"), "#fff0f6")
+                    with mid_col2:
+                        render_block("🎁", "Value Propositions", canvas.get("value_propositions"), "#fffbe6")
+                    with mid_col3:
+                        render_block("👥", "Customer Segments", canvas.get("customer_segments"), "#f0fffe")
+
+                    bot_col1, bot_col2 = st.columns(2)
+                    with bot_col1:
+                        render_block("💵", "Revenue Streams", canvas.get("revenue_streams"), "#f6fff0")
+                    with bot_col2:
+                        render_block("💰", "Cost Structure", canvas.get("cost_structure"), "#fff0f0")
+
+                    st.markdown("---")
+            else:
+                st.info("No valid Business Model Canvas data found in output.")
+    except json.JSONDecodeError as e:
+        st.error(f"❌ Could not parse Business Model Canvas JSON: {e}")
     except Exception as e:
-        st.error(f"❌ Error saving file: {e}")
+        st.error(f"⚠️ Error displaying Business Model Canvas: {e}")
