@@ -1,8 +1,10 @@
-# app.py
 import streamlit as st
 import google.generativeai as genai
 import os
 from visual_business_model_canvas import show_bmc_visualization
+from io import BytesIO
+from docx import Document
+
 # -------------------------------
 # Configure Gemini API
 # -------------------------------
@@ -24,7 +26,8 @@ STEPS = [
     "Dilemmas & Ranking",
     "Value Propositions",
     "SWOT Analysis",
-    "Business Model Canvas"
+    "Business Model Canvas",
+    "Business Plan"
 ]
 
 # -------------------------------
@@ -32,7 +35,7 @@ STEPS = [
 # -------------------------------
 PROMPTS = {
     "Focus Generation": """You are given the user's story below. Apply the Dilemma Triangle methodology (People, Planet, Prosperity) to extract focus areas.
-For each driver, produce 1–3 specific focus areas and a short rationale (1–2 sentences).
+For each driver, produce only 1 specific focus area and a short rationale (1–2 sentences).
 Return only valid JSON and nothing else:
 {
   "focuses": [
@@ -67,7 +70,7 @@ Return only valid JSON and nothing else:
   ]
 }""",
 
-    "Value Propositions": """For the top dilemmas, propose 2–5 concrete only maximum 3 value propositions (solutions) addressing the dilemmas while balancing drivers.
+    "Value Propositions": """For the top dilemmas, propose up to 3 concrete value propositions (solutions) addressing the dilemmas while balancing drivers.
 Return only valid JSON and nothing else:
 {
   "value_propositions":[
@@ -83,7 +86,7 @@ Return only valid JSON and nothing else:
   ]
 }""",
 
-"Business Model Canvas": """Generate a Business Model Canvas (9 blocks) for each value proposition.
+    "Business Model Canvas": """Generate a Business Model Canvas (9 blocks) for the selected value proposition.
 Return only valid JSON and nothing else. Make sure to include all 9 blocks with the exact keys:
 - key_partners
 - key_activities
@@ -113,7 +116,24 @@ JSON format example:
       }
     }
   ]
-}"""
+}""",
+
+    "Business Plan": """You are an expert business strategist.
+
+Using all the information provided below — including the original story, SWOT analysis, and the Business Model Canvas — create a clear and structured Business Plan (around 2–3 pages) that includes:
+
+1. Executive Summary
+2. Market Opportunity
+3. Business Model (connected to the BMC)
+4. Product or Service Description
+5. Marketing and Customer Strategy
+6. Operations Plan
+7. Financial and Sustainability Outlook
+8. Key Risks and Mitigation Strategies
+9. Conclusion and Next Steps
+
+Be concise yet insightful. Use bullet points or short paragraphs where suitable.
+Return the business plan in plain text (no JSON or markdown fences)."""
 }
 
 # -------------------------------
@@ -126,14 +146,21 @@ if "conversation" not in st.session_state:
 if "story" not in st.session_state:
     st.session_state.story = ""
 if "completed" not in st.session_state:
-    st.session_state.completed = False  # New flag for final completion
+    st.session_state.completed = False
+if "selected_value_prop" not in st.session_state:
+    st.session_state.selected_value_prop = None
 
 # -------------------------------
 # Current step
 # -------------------------------
 current_step = STEPS[st.session_state.step_index]
 st.title("🌍 Dilemma Triangle → Business Model Canvas")
-st.header(f"Step {st.session_state.step_index + 1}: {current_step}")
+# Show step title and selected value proposition if available
+if current_step == "Business Plan" and "selected_value_prop" in st.session_state and st.session_state.selected_value_prop:
+    vp_title = st.session_state.selected_value_prop.get("title", "")
+    st.header(f"Step {st.session_state.step_index + 1}: {current_step} – {vp_title}")
+else:
+    st.header(f"Step {st.session_state.step_index + 1}: {current_step}")
 
 # -------------------------------
 # Step 1: Story input
@@ -159,12 +186,18 @@ if current_step == "Story Input":
 # Step 2–8: LLM-driven steps
 # -------------------------------
 else:
-    # Generate if not already done
     if len(st.session_state.conversation) <= st.session_state.step_index:
         prev_outputs = "\n\n".join([f"### Step: {c['step']}\n{c['response']}" for c in st.session_state.conversation])
         base_prompt = PROMPTS.get(current_step, "")
         story_context = st.session_state.story
-        final_prompt = f"{base_prompt}\n\nContext:\n{story_context}\n\nPrevious Outputs:\n{prev_outputs}"
+
+        # Use selected SWOT if generating Business Model Canvas
+        if current_step == "Business Model Canvas" and st.session_state.selected_value_prop:
+            selected_swot = st.session_state.selected_value_prop
+            prev_outputs = f"### Selected SWOT\n{selected_swot}"
+            final_prompt = f"{base_prompt}\n\nContext:\n{story_context}\n\nSelected SWOT Value Proposition:\n{selected_swot}"
+        else:
+            final_prompt = f"{base_prompt}\n\nContext:\n{story_context}\n\nPrevious Outputs:\n{prev_outputs}"
 
         with st.spinner(f"Generating {current_step}..."):
             response = model.generate_content(final_prompt)
@@ -190,6 +223,9 @@ else:
                 st.write(item['response'])
 
         if idx == st.session_state.step_index:
+            # Skip feedback/refine/approve for Business Plan step
+            if item["step"] == "Business Plan":
+                continue
             feedback_key = f"feedback_{idx}"
             if feedback_key not in st.session_state:
                 st.session_state[feedback_key] = item.get("feedback", "")
@@ -203,6 +239,7 @@ else:
             col1, col2 = st.columns(2)
             with col1:
                 if st.button(f"🔄 Refine {item['step']}", key=f"refine_{idx}"):
+
                     if feedback_text.strip():
                         with st.spinner("Refining response..."):
                             refine_prompt = (
@@ -220,40 +257,21 @@ else:
 
             with col2:
                 if st.button(f"✅ Approve {item['step']}", key=f"approve_{idx}"):
+
                     if st.session_state.step_index < len(STEPS) - 1:
                         st.session_state.step_index += 1
                         st.success(f"Step {idx + 1} approved. Moving to next step: {STEPS[st.session_state.step_index]}")
                         st.rerun()
                     else:
-                        st.session_state.completed = True  # Mark process completed
-                        st.success("🎉 All steps completed! You can now export the final report.")
+                        st.session_state.completed = True
+                        st.success("🎉 All steps completed!")
                         st.rerun()
 
         else:
             st.caption("✅ Step completed")
 
 # -------------------------------
-# Final Export Button (only visible after last step approved)
-# -------------------------------
-if st.session_state.completed:
-    st.markdown("---")
-    if st.button("💾 Save Final Report"):
-        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
-        file_path = os.path.join(desktop_path, "BMC_Full_Report.txt")
-        try:
-            with open(file_path, "w", encoding="utf-8") as f:
-                for c in st.session_state.conversation:
-                    f.write(f"## {c['step']}\n")
-                    f.write(f"### Prompt:\n{c['prompt']}\n\n")
-                    f.write(f"### Response:\n{c['response']}\n\n")
-                    if c.get("feedback"):
-                        f.write(f"### Feedback:\n{c['feedback']}\n\n")
-            st.success(f"✅ Saved successfully at: {file_path}")
-        except Exception as e:
-            st.error(f"❌ Error saving file: {e}")
-
-# -------------------------------
-# Visual SWOT Analysis
+# SWOT Analysis Visualization + Selection
 # -------------------------------
 if current_step == "SWOT Analysis" and len(st.session_state.conversation) > 0:
     st.markdown("---")
@@ -279,11 +297,23 @@ if current_step == "SWOT Analysis" and len(st.session_state.conversation) > 0:
         else:
             data = json.loads(json_str)
             if "swot" in data and isinstance(data["swot"], list):
+            
+                # ---- Allow user to select one SWOT to continue ----
+                options = [entry.get("title", f"Option {i+1}") for i, entry in enumerate(data["swot"])]
+                selected_title = st.selectbox("Select the best value proposition to continue:", options)
+
+                st.session_state.selected_value_prop = next(
+                    (entry for entry in data["swot"] if entry.get("title") == selected_title),
+                    None
+                )
+                st.success(f"Selected value proposition: {selected_title}")
+
                 for entry in data["swot"]:
                     st.markdown(f"## 🌿 {entry.get('title', 'Untitled Initiative')}")
 
                     col1, col2 = st.columns(2)
                     with col1:
+                        # Strengths
                         st.markdown(
                             """
                             <div style="background-color:#e6ffe6;border-radius:10px;padding:10px 16px;margin-bottom:8px;">
@@ -294,6 +324,8 @@ if current_step == "SWOT Analysis" and len(st.session_state.conversation) > 0:
                             "</ul></div>",
                             unsafe_allow_html=True,
                         )
+
+                        # Weaknesses
                         st.markdown(
                             """
                             <div style="background-color:#fff0f0;border-radius:10px;padding:10px 16px;margin-bottom:8px;">
@@ -304,7 +336,9 @@ if current_step == "SWOT Analysis" and len(st.session_state.conversation) > 0:
                             "</ul></div>",
                             unsafe_allow_html=True,
                         )
+
                     with col2:
+                        # Opportunities
                         st.markdown(
                             """
                             <div style="background-color:#f0f8ff;border-radius:10px;padding:10px 16px;margin-bottom:8px;">
@@ -315,6 +349,8 @@ if current_step == "SWOT Analysis" and len(st.session_state.conversation) > 0:
                             "</ul></div>",
                             unsafe_allow_html=True,
                         )
+
+                        # Threats
                         st.markdown(
                             """
                             <div style="background-color:#fff8e6;border-radius:10px;padding:10px 16px;margin-bottom:8px;">
@@ -340,3 +376,44 @@ if current_step == "SWOT Analysis" and len(st.session_state.conversation) > 0:
 # -------------------------------
 if current_step == "Business Model Canvas" and len(st.session_state.conversation) > 0:
     show_bmc_visualization(st.session_state.conversation[-1]["response"])
+
+# -------------------------------
+# Business Plan (view + download only)
+# -------------------------------
+elif current_step == "Business Plan":
+    # The top-level "9. Business Plan" header is already shown — no need to repeat it
+    if "selected_value_prop" in st.session_state and st.session_state.selected_value_prop:
+        vp_title = st.session_state.selected_value_prop.get("title", "")
+        st.markdown(f"### 📄 Business Plan for **{vp_title}**")
+    else:
+        st.markdown("### 📄 Business Plan")
+
+    # Get the generated Business Plan text from the conversation
+    if len(st.session_state.conversation) > 0:
+        st.session_state.business_plan = st.session_state.conversation[-1]["response"]
+
+        # Display note and download option
+        st.success("✅ Business Plan generated successfully!")
+        # Create Word document
+        doc = Document()
+        doc.add_heading("Business Plan", level=1)
+        if "selected_value_prop" in st.session_state and st.session_state.selected_value_prop:
+            doc.add_paragraph(f"Value Proposition: {st.session_state.selected_value_prop.get('title','')}")
+
+        doc.add_paragraph(st.session_state.business_plan)
+
+        # Convert to bytes for download
+        buffer = BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+
+        st.download_button(
+            "⬇️ Download Business Plan (Word)",
+            data=buffer,
+            file_name="Business_Plan.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+
+    else:
+        st.warning("⚠️ No Business Plan found. Please complete the previous steps first.")
+
