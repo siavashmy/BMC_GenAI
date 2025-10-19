@@ -45,7 +45,7 @@ Return only valid JSON and nothing else:
   ]
 }""",
 
-    "Issues Generation": """Given the focus areas (and drivers), list 3–6 issues for each focus area that stem from it.
+    "Issues Generation": """Given the focus areas (and drivers), list 3–4 issues for each focus area that stem from it.
 Return only valid JSON and nothing else:
 {
   "issues_by_focus": [
@@ -70,7 +70,7 @@ Return only valid JSON and nothing else:
   ]
 }""",
 
-    "Value Propositions": """For the top dilemmas, propose up to 3 concrete value propositions (solutions) addressing the dilemmas while balancing drivers.
+    "Value Propositions": """For the top dilemmas, propose only 2-3 concrete value propositions (solutions) addressing the dilemmas while balancing drivers.
 Return only valid JSON and nothing else:
 {
   "value_propositions":[
@@ -154,7 +154,7 @@ if "selected_value_prop" not in st.session_state:
 # Current step
 # -------------------------------
 current_step = STEPS[st.session_state.step_index]
-st.title("🌍 Dilemma Triangle → Business Model Canvas")
+st.title("Business Plan Dashboard")
 # Show step title and selected value proposition if available
 if current_step == "Business Plan" and "selected_value_prop" in st.session_state and st.session_state.selected_value_prop:
     vp_title = st.session_state.selected_value_prop.get("title", "")
