@@ -35,7 +35,7 @@ STEPS = [
 # -------------------------------
 PROMPTS = {
     "Focus Generation": """You are given the user's story below. Apply the Dilemma Triangle methodology (People, Planet, Prosperity) to extract focus areas.
-For each driver, produce only 1 specific focus area and a short rationale (1–2 sentences).
+For each driver, produce only 1 specific focus area and a short rationale saying that why it does not exclude any SDGs and clearly indicate which SDGs the focus addresses.(2–3 sentences).
 Return only valid JSON and nothing else:
 {
   "focuses": [
@@ -154,7 +154,7 @@ if "selected_value_prop" not in st.session_state:
 # Current step
 # -------------------------------
 current_step = STEPS[st.session_state.step_index]
-st.title("Business Plan Dashboard")
+st.title("💼🌿 Business Plan Dashboard")
 # Show step title and selected value proposition if available
 if current_step == "Business Plan" and "selected_value_prop" in st.session_state and st.session_state.selected_value_prop:
     vp_title = st.session_state.selected_value_prop.get("title", "")
@@ -243,7 +243,7 @@ else:
                     if feedback_text.strip():
                         with st.spinner("Refining response..."):
                             refine_prompt = (
-                                f"Refine the following output based on this feedback.\n\n"
+                                f"Refine the following output based on this feedback. Follow EXACTLY the same structure, format, and JSON schema and DO NOT change the response structure. \n\n"
                                 f"Feedback:\n{feedback_text}\n\nOriginal Output:\n{item['response']}"
                             )
                             refined = model.generate_content(refine_prompt)
