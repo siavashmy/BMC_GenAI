@@ -1,6 +1,30 @@
-streamlit
-pandas
-numpy
-matplotlib
-google-generativeai
-python-docx
+# ---- Core App ----
+streamlit>=1.39
+google-generativeai>=0.5.2
+
+# ---- LangChain ecosystem ----
+langchain>=0.3.26
+langchain-core>=1.0.1
+langchain-community>=0.3.1
+langchain-chroma>=0.1.2
+langchain-huggingface>=0.1.1
+
+# ---- Vector store & Embeddings ----
+chromadb>=0.5.3
+sentence-transformers>=3.0.1
+
+# ---- PDF & Text Handling ----
+pypdf>=5.0.0
+unstructured>=0.15.7
+
+# ---- Word document export ----
+python-docx>=1.1.2
+
+# ---- Misc dependencies ----
+tqdm>=4.66.3
+numpy>=1.26.4
+pandas>=2.2.3
+
+# ---- Optional (for HuggingFace backend stability) ----
+torch>=2.3.0
+transformers>=4.45.0

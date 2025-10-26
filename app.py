@@ -1,9 +1,17 @@
 import streamlit as st
 import google.generativeai as genai
 import os
+import chromadb
+import tempfile
+import re
+from langchain_core.documents import Document
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
 from visual_business_model_canvas import show_bmc_visualization
 from io import BytesIO
-from docx import Document
+from docx import Document as WordDocument
 
 # -------------------------------
 # Configure Gemini API
@@ -13,7 +21,7 @@ if "GEMINI_API_KEY" not in st.secrets:
     st.stop()
 
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel("gemini-2.0-flash")
+model = genai.GenerativeModel("gemini-2.5-flash")
 
 # -------------------------------
 # Define workflow steps
@@ -27,6 +35,7 @@ STEPS = [
     "Value Propositions",
     "SWOT Analysis",
     "Business Model Canvas",
+    "Knowledge Upload & RAG Integration",
     "Business Plan"
 ]
 
@@ -378,42 +387,151 @@ if current_step == "Business Model Canvas" and len(st.session_state.conversation
     show_bmc_visualization(st.session_state.conversation[-1]["response"])
 
 # -------------------------------
+# Step 8.5: Knowledge Upload & RAG Integration
+# -------------------------------
+
+
+# ✅ Move the suggestion prompt *inside* the condition block
+if current_step == "Knowledge Upload & RAG Integration":
+    # ---- Step title ----
+    st.subheader("🧠 Knowledge Upload for RAG Integration")
+
+    # ---- LLM Suggestion ----
+    suggest_prompt = f"""
+    Given this Business Model Canvas:
+    {st.session_state.conversation[-1]['response']}
+    Suggest 3 categories of data related to the given business model canvas that would help improve the final business plan. Keep your response brief.
+    """
+    suggestions = model.generate_content(suggest_prompt)
+    st.markdown("### 💡 Suggested Information to Upload")
+    st.markdown(suggestions.text)
+
+    # ---- Upload interface ----
+    st.markdown("""
+    Upload any relevant documents or paste external text.
+    This information will be indexed and used to enrich your Business Plan.
+    """)
+
+    uploaded_files = st.file_uploader("📄 Upload documents (PDF, TXT, DOCX):", accept_multiple_files=True)
+    user_text = st.text_area("✏️ Or paste key background text here:")
+
+    # ---- Process button ----
+    if st.button("📚 Process Knowledge Sources"):
+        with st.spinner("Processing and embedding documents..."):
+            persist_directory = "./chroma_db"
+
+            # Initialize embeddings and vector DB
+            embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+            vectorstore = Chroma(
+                collection_name="business_knowledge",
+                embedding_function=embeddings,
+                persist_directory=persist_directory
+            )
+
+            tmpdir = tempfile.TemporaryDirectory()
+            text_data = []
+
+            # Load PDFs and TXTs
+            for f in uploaded_files or []:
+                # Clean the filename for Windows safety
+                safe_name = re.sub(r"[^a-zA-Z0-9_.-]", "_", f.name)
+                path = f"{tmpdir.name}/{safe_name}"
+
+                with open(path, "wb") as temp_file:
+                    temp_file.write(f.read())
+
+                if path.lower().endswith(".pdf"):
+                    loader = PyPDFLoader(path)
+                    text_data += loader.load()
+                else:
+                    # Manually handle .txt files for full safety
+                    
+                    with open(path, "r", encoding="utf-8", errors="ignore") as file:
+                        content = file.read()
+                    text_data.append(
+                        Document(page_content=content, metadata={"source": safe_name})
+                    )
+
+            # Add pasted text
+            if user_text.strip():
+                text_data.append(
+                    Document(page_content=user_text.strip(), metadata={"source": "manual_input"})
+                )
+            # Split and store
+            splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+            docs = splitter.split_documents(text_data)
+            vectorstore.add_documents(docs)
+
+            st.success(f"✅ {len(docs)} text chunks processed and stored.")
+            st.session_state.knowledge_ready = True
+            st.session_state.step_index += 1
+            st.rerun()
+
+# -------------------------------
 # Business Plan (view + download only)
 # -------------------------------
 elif current_step == "Business Plan":
-    # The top-level "9. Business Plan" header is already shown — no need to repeat it
-    if "selected_value_prop" in st.session_state and st.session_state.selected_value_prop:
-        vp_title = st.session_state.selected_value_prop.get("title", "")
-        st.markdown(f"### 📄 Business Plan for **{vp_title}**")
-    else:
-        st.markdown("### 📄 Business Plan")
+    st.markdown("### 📄 Business Plan Generation")
 
-    # Get the generated Business Plan text from the conversation
-    if len(st.session_state.conversation) > 0:
-        st.session_state.business_plan = st.session_state.conversation[-1]["response"]
-
-        # Display note and download option
-        st.success("✅ Business Plan generated successfully!")
-        # Create Word document
-        doc = Document()
-        doc.add_heading("Business Plan", level=1)
-        if "selected_value_prop" in st.session_state and st.session_state.selected_value_prop:
-            doc.add_paragraph(f"Value Proposition: {st.session_state.selected_value_prop.get('title','')}")
-
-        doc.add_paragraph(st.session_state.business_plan)
-
-        # Convert to bytes for download
-        buffer = BytesIO()
-        doc.save(buffer)
-        buffer.seek(0)
-
-        st.download_button(
-            "⬇️ Download Business Plan (Word)",
-            data=buffer,
-            file_name="Business_Plan.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    # ---- Retrieve contextual knowledge if available ----
+    retrieved_text = ""
+    if st.session_state.get("knowledge_ready", False):
+        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        vectorstore = Chroma(
+            collection_name="business_knowledge",
+            embedding_function=embeddings,
+            persist_directory="./chroma_db"
         )
 
-    else:
-        st.warning("⚠️ No Business Plan found. Please complete the previous steps first.")
+        query = f"Generate business plan insights for {st.session_state.selected_value_prop.get('title', '')}"
+        results = vectorstore.similarity_search(query, k=5)
+
+        # ✅ DEBUG: Print retrieved chunks in console
+        print("\n\n================ Retrieved Chunks ================")
+        for i, doc in enumerate(results, start=1):
+            print(f"Chunk {i} — Source: {doc.metadata.get('source', 'unknown')}")
+            print(f"Content Preview:\n{doc.page_content[:500]}\n{'-'*80}")
+        print("==================================================\n\n")
+
+        retrieved_text = "\n\n".join([doc.page_content for doc in results])
+        st.info("✅ Using retrieved contextual knowledge from your uploads.")
+
+    # ---- Generate plan only if not already in session ----
+    if "business_plan_text" not in st.session_state:
+        with st.spinner("Generating enriched Business Plan..."):
+            bmc_output = st.session_state.conversation[-2]["response"]  # assuming last BMC step is before RAG
+            final_prompt = f"""
+            You are an expert business strategist.
+
+            Context:
+            Story: {st.session_state.story}
+            Selected Value Proposition: {st.session_state.selected_value_prop}
+            Business Model Canvas: {bmc_output}
+            Retrieved Knowledge:
+            {retrieved_text}
+
+            Now create a structured business plan as before, integrating this additional knowledge.
+            """
+            response = model.generate_content(final_prompt)
+            text_response = response.text if hasattr(response, "text") else "Error: No valid response."
+            st.session_state.business_plan_text = text_response
+            st.success("✅ Enriched Business Plan generated successfully!")
+
+    # ---- Display & download (no rerun trigger) ----
+    text_response = st.session_state.get("business_plan_text", "No plan available yet.")
+    st.text_area("📄 Business Plan Preview", text_response, height=400)
+
+    doc = WordDocument()
+    doc.add_heading("Business Plan", level=1)
+    doc.add_paragraph(text_response)
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+
+    st.download_button(
+        "⬇️ Download Business Plan (Word)",
+        data=buffer,
+        file_name="Business_Plan_Enriched.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
 
