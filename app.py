@@ -500,17 +500,30 @@ elif current_step == "Business Plan":
     if "business_plan_text" not in st.session_state:
         with st.spinner("Generating enriched Business Plan..."):
             bmc_output = st.session_state.conversation[-2]["response"]  # assuming last BMC step is before RAG
+            
+            # Combine full conversation if available
+            if "conversation" in st.session_state and st.session_state.conversation:
+                full_chat = "\n".join([
+                    f"{msg.get('role','unknown')}: {msg.get('content','')}"
+                    for msg in st.session_state.conversation
+                ])
+            else:
+                full_chat = "No full chat history available."
+
             final_prompt = f"""
             You are an expert business strategist.
 
             Context:
+            Full Chat History:
+            {full_chat}
+
             Story: {st.session_state.story}
             Selected Value Proposition: {st.session_state.selected_value_prop}
             Business Model Canvas: {bmc_output}
             Retrieved Knowledge:
             {retrieved_text}
 
-            Now create a structured business plan as before, integrating this additional knowledge.
+            Now create a structured and comprehensive business plan as before, integrating this additional knowledge.
             """
             response = model.generate_content(final_prompt)
             text_response = response.text if hasattr(response, "text") else "Error: No valid response."
