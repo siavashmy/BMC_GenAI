@@ -45,7 +45,7 @@ STEPS = [
 PROMPTS = {
 "Focus Generation": """You are an expert in sustainable systems design and the Dilemma Triangle framework.
 You are given the user's story below.
-1. First, identify three key systemic drivers that best represent the main dilemmas or dimensions of the story. 
+1. First, identify three key systemic drivers that best represent the main players or dimensions of the story. 
    - Drivers should reflect interdependent perspectives such as environmental, social, economic, technological, cultural, or ethical aspects of the story.
    - Avoid generic repetition.
 2. For each driver, generate:
