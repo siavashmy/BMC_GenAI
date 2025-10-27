@@ -43,14 +43,20 @@ STEPS = [
 # Predefined prompt templates
 # -------------------------------
 PROMPTS = {
-    "Focus Generation": """You are given the user's story below. Apply the Dilemma Triangle methodology (People, Planet, Prosperity) to extract focus areas.
-For each driver, produce only 1 specific focus area and a short rationale saying that why it does not exclude any SDGs and clearly indicate which SDGs the focus addresses.(2–3 sentences).
-Return only valid JSON and nothing else:
+"Focus Generation": """You are an expert in sustainable systems design and the Dilemma Triangle framework.
+You are given the user's story below.
+1. First, identify three key systemic drivers that best represent the main dilemmas or dimensions of the story. 
+   - Drivers should reflect interdependent perspectives such as environmental, social, economic, technological, cultural, or ethical aspects of the story.
+   - Avoid generic repetition.
+2. For each driver, generate:
+   - One specific, actionable focus area related to that driver.
+   - A short rationale (2–3 sentences) explaining why this focus.
+Return only valid JSON and nothing else, using this format:
 {
   "focuses": [
-    {"driver":"People","focus":"...","rationale":"..."},
-    {"driver":"Planet","focus":"...","rationale":"..."},
-    {"driver":"Prosperity","focus":"...","rationale":"..."}
+    {"driver":"<derived_driver_1>","focus":"...","rationale":"..."},
+    {"driver":"<derived_driver_2>","focus":"...","rationale":"..."},
+    {"driver":"<derived_driver_3>","focus":"...","rationale":"..."}
   ]
 }""",
 
@@ -75,7 +81,7 @@ Each dilemma should include a title, description, affected drivers, and an impor
 Return only valid JSON and nothing else:
 {
   "dilemmas":[
-    {"title":"...","description":"...","drivers":["People","Planet"],"score":8}
+    {"title":"...","description":"...","drivers":["<derived_driver_1>","<derived_driver_2>"],"score":8}
   ]
 }""",
 
