@@ -176,6 +176,7 @@ else:
 # -------------------------------
 if current_step == "Story Input":
     user_story = st.text_area("✏️ Please provide the full story or context:", value=st.session_state.story, height=200)
+    st.markdown("<p style='font-size: 14px; color: gray;'>💡 Tip: Please write at least <b>150 words</b>, including your goals, local context, and challenges.</p>", unsafe_allow_html=True)
     if st.button("Submit Story"):
         if user_story.strip():
             st.session_state.story = user_story.strip()
