@@ -95,8 +95,8 @@ Return only valid JSON and nothing else:
   ]
 }""",
 
-    "Business Model Canvas": """Generate a Business Model Canvas (9 blocks) for the selected value proposition.
-Return only valid JSON and nothing else. Make sure to include all 9 blocks with the exact keys:
+    "Business Model Canvas": """Generate a Sustainable Business Model Canvas (11 blocks) for the selected value proposition.
+Return only valid JSON and nothing else. Make sure to include all 11 blocks with the exact keys:
 - key_partners
 - key_activities
 - key_resources
@@ -106,6 +106,8 @@ Return only valid JSON and nothing else. Make sure to include all 9 blocks with 
 - customer_segments
 - revenue_streams
 - cost_structure
+- Social and Environmental Benefits
+- Social and Environmental Costs
 
 JSON format example:
 {
