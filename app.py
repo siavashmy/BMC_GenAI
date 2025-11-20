@@ -123,7 +123,9 @@ JSON format example:
         "channels":["..."],
         "customer_segments":["..."],
         "revenue_streams":["..."],
-        "cost_structure":["..."]
+        "cost_structure":["..."],
+        "Social and Environmental Benefits":["..."],
+        "Social and Environmental Costs":["..."]
       }
     }
   ]
