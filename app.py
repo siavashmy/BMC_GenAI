@@ -13,7 +13,7 @@ if "GEMINI_API_KEY" not in st.secrets:
     st.stop()
 
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel("gemini-3-flash")
+model = genai.GenerativeModel("models/gemini-2.5-flash-lite")
 
 # -------------------------------
 # Define workflow steps
