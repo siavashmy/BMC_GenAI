@@ -28,7 +28,7 @@ model = genai.GenerativeModel("gemini-2.5-flash")
 # -------------------------------
 STEPS = [
     "Story Input",
-    "Focus and Driver Generation",
+    "Driver and Focus Generation",
     "Issues Generation",
     "Tension Matrix",
     "Dilemmas & Ranking",
@@ -43,7 +43,7 @@ STEPS = [
 # Predefined prompt templates
 # -------------------------------
 PROMPTS = {
-    "Focus and Driver Generation": """You are given the user's story below. Apply the Dilemma Triangle methodology (People, Planet, Prosperity) to extract focus areas.
+    "Driver and Focus Generation": """You are given the user's story below. Apply the Dilemma Triangle methodology (People, Planet, Prosperity) to extract focus areas.
 For each driver, produce only 1 specific focus area and a short rationale saying that why it does not exclude any SDGs and clearly indicate which SDGs the focus addresses.(2–3 sentences).
 Return only valid JSON and nothing else:
 {
