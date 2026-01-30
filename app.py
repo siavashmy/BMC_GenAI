@@ -28,7 +28,7 @@ model = genai.GenerativeModel("gemini-2.5-flash")
 # -------------------------------
 STEPS = [
     "Story Input",
-    "Focus Generation",
+    "Focus and Driver Generation",
     "Issues Generation",
     "Tension Matrix",
     "Dilemmas & Ranking",
@@ -43,7 +43,7 @@ STEPS = [
 # Predefined prompt templates
 # -------------------------------
 PROMPTS = {
-    "Focus Generation": """You are given the user's story below. Apply the Dilemma Triangle methodology (People, Planet, Prosperity) to extract focus areas.
+    "Focus and Driver Generation": """You are given the user's story below. Apply the Dilemma Triangle methodology (People, Planet, Prosperity) to extract focus areas.
 For each driver, produce only 1 specific focus area and a short rationale saying that why it does not exclude any SDGs and clearly indicate which SDGs the focus addresses.(2–3 sentences).
 Return only valid JSON and nothing else:
 {
@@ -54,23 +54,28 @@ Return only valid JSON and nothing else:
   ]
 }""",
 
-    "Issues Generation": """Given the focus areas (and drivers), list 3–4 issues for each focus area that stem from it.
+    "Issues Generation": """Given the focus areas (and drivers), list 2–3 issues for each focus area that stem from it. Each issue MUST be a short noun phrase (2–6 words), not a full sentence!
 Return only valid JSON and nothing else:
 {
   "issues_by_focus": [
-    {"focus":"...","driver":"...","issues":[{"issue":"...","explain":"..."}]}
+    {"driver":"...","focus":"...","issues":[{"issue":"...","explain":"..."}]}
   ]
 }""",
 
-    "Tension Matrix": """Given the issues across focuses, generate a tension matrix describing conflicts or tradeoffs between issues.
+    "Tension Matrix": """Given the issues across focuses, generate a tension matrix describing conflicts or tradeoffs between issues. Include the relevant drivers for each issue.
 Return only valid JSON and nothing else:
 {
   "tensions":[
-    {"issue_a":"...","issue_b":"...","tension":"...","why":"..."}
+    {"issue_a":"...","driver":"...","issue_b":"...","driver":"...","tension":"...","why":"..."}
   ]
 }""",
 
-    "Dilemmas & Ranking": """From the tension matrix, generate dilemmas phrased as tradeoffs.
+    "Dilemmas & Ranking": """From the tension matrix, generate ONLY true dilemmas (not one per tension).
+A dilemma is a hard, persistent tradeoff that cannot be solved easily.
+Instructions:
+- Ignore tensions that have clear or easy solutions.
+- Combine related hard tensions into a single dilemma when they reflect the same underlying tradeoff.
+- It is normal if several tensions produce fewer dilemmas.
 Each dilemma should include a title, description, affected drivers, and an importance score (1–10).
 Return only valid JSON and nothing else:
 {
