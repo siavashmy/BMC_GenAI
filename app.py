@@ -1,9 +1,9 @@
 import streamlit as st
-from ollama import Client
+import google.generativeai as genai
 import os
 import chromadb
 import tempfile
-import json, re
+import re
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
@@ -14,32 +14,14 @@ from io import BytesIO
 from docx import Document as WordDocument
 
 # -------------------------------
-# Configure Ollama Cloud API
+# Configure Gemini API
 # -------------------------------
-if "OLLAMA_API_KEY" not in st.secrets:
-    st.error("❌ Please add your OLLAMA_API_KEY in Streamlit Secrets.")
+if "GEMINI_API_KEY" not in st.secrets:
+    st.error("❌ Please add your Gemini API key in Streamlit Secrets.")
     st.stop()
 
-if "OLLAMA_MODEL" not in st.secrets:
-    st.error("❌ Please add your OLLAMA_MODEL in Streamlit Secrets.")
-    st.stop()
-
-OLLAMA_HOST = st.secrets.get("OLLAMA_HOST", "https://ollama.com")
-OLLAMA_MODEL = st.secrets["OLLAMA_MODEL"]
-
-ollama_client = Client(
-    host=OLLAMA_HOST,
-    headers={"Authorization": f"Bearer {st.secrets['OLLAMA_API_KEY']}"}
-)
-
-def llm_generate(prompt: str) -> str:
-    # matches your current "single prompt string" workflow
-    resp = ollama_client.chat(
-        model=OLLAMA_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        stream=False
-    )
-    return resp["message"]["content"]
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+model = genai.GenerativeModel("gemini-2.5-flash")
 
 # -------------------------------
 # Define workflow steps
@@ -237,7 +219,8 @@ else:
             final_prompt = f"{base_prompt}\n\nContext:\n{story_context}\n\nPrevious Outputs:\n{prev_outputs}"
 
         with st.spinner(f"Generating {current_step}..."):
-            text_response = llm_generate(final_prompt)
+            response = model.generate_content(final_prompt)
+            text_response = response.text if hasattr(response, "text") else "Error: No valid response."
 
         st.session_state.conversation.append({
             "step": current_step,
@@ -256,19 +239,7 @@ else:
         else:
             st.markdown(f"**🤖 LLM Output:**")
             with st.expander("View Output"):
-                text = item["response"]
-
-                # If the output contains a JSON object, extract it
-                m = re.search(r"(\{[\s\S]*\})", text)
-                json_str = m.group(1) if m else None
-
-                if json_str:
-                    try:
-                        st.json(json.loads(json_str))      # pretty JSON viewer (like your old screenshot)
-                    except Exception:
-                        st.code(text, language="json")     # fallback if not valid JSON
-                else:
-                    st.write(text)
+                st.write(item['response'])
 
         if idx == st.session_state.step_index:
             # Skip feedback/refine/approve for Business Plan step
@@ -294,7 +265,8 @@ else:
                                 f"Refine the following output based on this feedback. Follow EXACTLY the same structure, format, and JSON schema and DO NOT change the response structure. \n\n"
                                 f"Feedback:\n{feedback_text}\n\nOriginal Output:\n{item['response']}"
                             )
-                            refined_text = llm_generate(refine_prompt)
+                            refined = model.generate_content(refine_prompt)
+                            refined_text = refined.text if hasattr(refined, "text") else "Error: No refined response."
                             st.session_state.conversation[idx]["response"] = refined_text
                             st.session_state.conversation[idx]["feedback"] = feedback_text
                         st.success("✅ Response refined successfully.")
@@ -440,9 +412,9 @@ if current_step == "Knowledge Upload & RAG Integration":
     {st.session_state.conversation[-1]['response']}
     Suggest 3 categories of data related to the given business model canvas that would help improve the final business plan. Keep your response brief.
     """
-    suggestions_text = llm_generate(suggest_prompt)
+    suggestions = model.generate_content(suggest_prompt)
     st.markdown("### 💡 Suggested Information to Upload")
-    st.markdown(suggestions_text)
+    st.markdown(suggestions.text)
 
     # ---- Upload interface ----
     st.markdown("""
@@ -563,7 +535,8 @@ elif current_step == "Business Plan":
 
             Now create a structured and comprehensive business plan as before, integrating this additional knowledge.
             """
-            text_response = llm_generate(final_prompt)
+            response = model.generate_content(final_prompt)
+            text_response = response.text if hasattr(response, "text") else "Error: No valid response."
             st.session_state.business_plan_text = text_response
             st.success("✅ Enriched Business Plan generated successfully!")
 
