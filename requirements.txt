@@ -1,6 +1,6 @@
 # ---- Core App ----
 streamlit>=1.39
-google-generativeai>=0.5.2
+ollama>=0.3.0
 
 # ---- LangChain ecosystem ----
 langchain>=0.3.26
